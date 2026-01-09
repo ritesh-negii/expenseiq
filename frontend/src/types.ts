@@ -1,0 +1,6 @@
+
+//this indicates the type of a message
+export type Message = {
+  role: "user" | "assistant";
+  text: string;
+};
