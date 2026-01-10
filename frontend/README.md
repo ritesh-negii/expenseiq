@@ -1,73 +1,186 @@
-# React + TypeScript + Vite
+# ExpenseIQ 💸🤖
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+ExpenseIQ is an **AI-powered expense analysis web application** that allows users to upload expense files (CSV / Excel), ask natural-language questions, and receive **data-backed insights** with charts and tables.
 
-Currently, two official plugins are available:
+This project is designed with **clean architecture, AI guardrails, and a modern UI**, making it suitable for real-world use and interviews.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+---
 
-## React Compiler
+## 🚀 Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+* 📂 Upload expense files (`.csv`, `.xlsx`)
+* 💬 Ask questions in natural language
+* 🤖 AI-powered answers using **Google Gemini**
+* 📊 Automatic insights panel with:
 
-## Expanding the ESLint configuration
+  * Total spending
+  * Top category
+  * Transaction count
+  * Category-wise bar chart
+  * Recent transactions table
+* 🛡️ AI guardrails:
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+  * Answers **only expense-related questions**
+  * Refuses irrelevant queries politely
+  * Never invents numbers
+* 🎨 Clean, responsive UI with Tailwind CSS
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+---
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## 🧱 Tech Stack
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Frontend
+
+* React + TypeScript
+* Vite
+* Tailwind CSS
+* Recharts
+* Lucide Icons
+
+### Backend
+
+* FastAPI
+* Pandas
+* Google Gemini (`google.genai`)
+* Python-dotenv
+
+---
+
+## 📁 Project Structure
+
+```
+expenseiq/
+├── backend/
+│   ├── main.py
+│   ├── .env
+│   └── requirements.txt
+│
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── ChatWindow.tsx
+│   │   │   ├── MessageBubble.tsx
+│   │   │   ├── InputBar.tsx
+│   │   │   ├── InsightPanel.tsx
+│   │   │   ├── ExpenseChart.tsx
+│   │   │   └── ExpenseTable.tsx
+│   │   ├── types.ts
+│   │   ├── App.tsx
+│   │   └── main.tsx
+│   └── package.json
+└── README.md
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+---
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 📄 Expected Expense File Format
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+The uploaded file **must contain these columns**:
+
+| Column Name   | Description      |
+| ------------- | ---------------- |
+| `date`        | Transaction date |
+| `description` | Merchant / note  |
+| `category`    | Expense category |
+| `amount`      | Amount spent     |
+
+Example:
+
 ```
+date,description,category,amount
+2024-06-01,Zomato Order,Food,450
+2024-06-02,Uber Ride,Travel,320
+```
+
+---
+
+## ⚙️ Setup Instructions
+
+### 1️⃣ Backend Setup
+
+```bash
+cd backend
+python -m venv venv
+venv\Scripts\activate   # Windows
+pip install -r requirements.txt
+```
+
+Create `.env` file:
+
+```
+GEMINI_API_KEY=your_api_key_here
+```
+
+Run server:
+
+```bash
+uvicorn main:app --reload
+```
+
+Server runs at: `http://localhost:8000`
+
+---
+
+### 2️⃣ Frontend Setup
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend runs at: `http://localhost:5173`
+
+---
+
+## 🧠 AI Behavior (Important)
+
+The AI is **strictly constrained**:
+
+* ✅ Answers only based on uploaded expense data
+* ❌ Refuses unrelated questions
+* ❌ Does not give financial advice
+* ❌ Does not invent numbers
+
+Example:
+
+> ❓ "What did I spend the most on?"
+
+✅ Answered
+
+> ❓ "How can I invest better?"
+
+❌ Politely refused
+
+---
+
+## 🧪 Example Questions to Try
+
+* What category did I spend the most on?
+* Is there any unusually high spending?
+* Show my recent transactions
+* What is my total expense?
+
+---
+
+## 📌 Future Improvements (Optional)
+
+* User authentication
+* Monthly comparison
+* Export insights as PDF/CSV
+* Multiple file uploads
+* Deployment (Vercel + Render)
+
+---
+
+## 👨‍💻 Author
+
+Built by **Ritesh Negi** 🚀
+For learning, interviews, and real-world experimentation.
+
+---
+
+## 📜 License
+
+This project is open-source and free to use for educational purposes.
+

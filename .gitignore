@@ -3,9 +3,11 @@ backend/.env
 backend/__pycache__/
 backend/.venv/
 *.pyc
-
+.env
 # Node
 node_modules/
 
 # OS
 .DS_Store
+
+dist/
