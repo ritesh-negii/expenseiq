@@ -32,7 +32,7 @@ function App() {
     formData.append("question", input);
 
     try {
-      const res = await fetch("http://localhost:8000/analyze", {
+      const res = await fetch("https://expenseiq-6h8f.onrender.com/analyze", {
         method: "POST",
         body: formData,
       });
