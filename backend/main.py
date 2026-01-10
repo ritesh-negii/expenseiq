@@ -2,16 +2,20 @@ from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import os
-import google.generativeai as genai
 from dotenv import load_dotenv
+from google import genai
 
-# Load env variables
+# -------------------------------------------------
+# Load environment variables
+# -------------------------------------------------
 load_dotenv()
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Configure Gemini
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel("gemini-1.5-flash")
+client = genai.Client(api_key=GEMINI_API_KEY)
 
+# -------------------------------------------------
+# App setup
+# -------------------------------------------------
 app = FastAPI()
 
 app.add_middleware(
@@ -22,29 +26,50 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# -------------------------------------------------
+# Analyze endpoint
+# -------------------------------------------------
 @app.post("/analyze")
 async def analyze_expenses(
     file: UploadFile = File(...),
     question: str = Form(...)
 ):
     # ---------- Read file ----------
-    if file.filename.endswith(".csv"):
-        df = pd.read_csv(file.file)
-    else:
-        df = pd.read_excel(file.file)
-
-    # ---------- Validate columns ----------
-    REQUIRED_COLUMNS = {"date", "description", "category", "amount"}
-    if not REQUIRED_COLUMNS.issubset(df.columns):
+    try:
+        if file.filename.endswith(".csv"):
+            df = pd.read_csv(file.file)
+        else:
+            df = pd.read_excel(file.file)
+    except Exception:
         return {
-            "answer": "❌ This file does not look like an expense statement. Required columns: date, description, category, amount.",
+            "answer": "❌ Unable to read the uploaded file.",
             "chartData": [],
             "tableData": [],
         }
 
+    # ---------- Validate structure ----------
+    REQUIRED_COLUMNS = {"date", "description", "category", "amount"}
+    if not REQUIRED_COLUMNS.issubset(df.columns):
+        return {
+            "answer": (
+                "❌ This file does not look like an expense statement. "
+                "Required columns: date, description, category, amount."
+            ),
+            "chartData": [],
+            "tableData": [],
+        }
+
+    if df.empty:
+        return {
+            "answer": "❌ The uploaded file contains no expense records.",
+            "chartData": [],
+            "tableData": [],
+        }
+
+    # ---------- Clean data ----------
     df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0)
 
-    # ---------- Prepare structured data ----------
+    # ---------- Calculations ----------
     total_spent = int(df["amount"].sum())
     transaction_count = len(df)
 
@@ -60,37 +85,60 @@ async def analyze_expenses(
     chart_data = category_totals_df.to_dict(orient="records")
     table_data = df.head(10).to_dict(orient="records")
 
-    # ---------- AI PROMPT (very important) ----------
+    # ---------- AI Prompt ----------
     prompt = f"""
-You are an AI expense analysis assistant.
+You are an AI assistant that analyzes expense data.
 
-RULES:
-- You can ONLY answer questions related to the expense data.
-- If the question is unrelated, politely refuse.
-- Do NOT invent numbers.
-- Use ONLY the data provided.
+YOUR ROLE:
+- Answer questions ONLY if they are related to the provided expense data
+- Use numbers strictly from the data
+- You MAY describe patterns, comparisons, and observations
+- You MAY explain what categories are high or low
+- You MAY explain what the data suggests
 
-Expense Summary:
-- Total spent: ₹{total_spent}
-- Top category: {top_category}
-- Transactions: {transaction_count}
+RESTRICTIONS:
+- Do NOT give personal finance advice
+- Do NOT suggest actions like saving, investing, budgeting
+- Do NOT invent data
+- If a question is unrelated to expenses, politely refuse
 
-Category totals:
-{chart_data}
+IMPORTANT CLARIFICATION:
+- Questions like "how can I manage expenses" mean:
+  → explain which categories are high or dominant
+  → NOT giving advice on how to save money
+
+Expense data:
+Total spent: ₹{total_spent}
+Top category: {top_category}
+Transactions: {transaction_count}
+Category totals: {chart_data}
 
 User question:
 {question}
 
-Answer clearly in simple language.
+Answer clearly in short, plain text sentences.
 """
+
 
     # ---------- Gemini call ----------
     try:
-        ai_response = model.generate_content(prompt)
-        answer = ai_response.text
-    except Exception:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
+
+        answer = (
+            response.text
+            .replace("**", "")
+            .replace("*", "")
+            .strip()
+        )
+
+    except Exception as e:
+        print("Gemini error:", e)
         answer = "⚠️ AI analysis failed. Please try again."
 
+    # ---------- Final response ----------
     return {
         "answer": answer,
         "chartData": chart_data,
@@ -101,3 +149,6 @@ Answer clearly in simple language.
             "transactionCount": transaction_count,
         },
     }
+
+
+
