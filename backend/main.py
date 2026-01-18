@@ -5,39 +5,36 @@ import os
 from dotenv import load_dotenv
 from google import genai
 
-# -------------------------------------------------
-# Load environment variables
-# -------------------------------------------------
+
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
+if not GEMINI_API_KEY:
+    raise ValueError("GEMINI_API_KEY not found in .env file")
+
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# -------------------------------------------------
-# App setup
-# -------------------------------------------------
+
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173",
-    "https://expenseiq-lyart.vercel.app",],
+    allow_origins=[
+        "http://localhost:5173",
+        "https://expenseiq-lyart.vercel.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# -------------------------------------------------
-# Analyze endpoint
-# -------------------------------------------------
-# ... (imports and setup are fine) ...
 
 @app.post("/analyze")
 async def analyze_expenses(
     file: UploadFile = File(...),
     question: str = Form(...)
 ):
-    # ---------- Read file & Validation (Keep your existing code here) ----------
+    #Read file 
     try:
         if file.filename.endswith(".csv"):
             df = pd.read_csv(file.file)
@@ -46,14 +43,15 @@ async def analyze_expenses(
     except Exception:
         return {"answer": "❌ Unable to read file.", "chartData": [], "tableData": []}
 
+    # Validate 
     REQUIRED_COLUMNS = {"date", "description", "category", "amount"}
     if not REQUIRED_COLUMNS.issubset(df.columns) or df.empty:
-        return {"answer": "❌ Invalid or empty file.", "chartData": [], "tableData": []}
+        return {"answer": "❌ Invalid or empty expense file.", "chartData": [], "tableData": []}
 
-    # ---------- Clean data ----------
+    
     df["amount"] = pd.to_numeric(df["amount"], errors="coerce").fillna(0)
 
-    # ---------- Calculations ----------
+    # Calculations 
     total_spent = int(df["amount"].sum())
     transaction_count = len(df)
 
@@ -64,61 +62,109 @@ async def analyze_expenses(
         .sort_values(by="amount", ascending=False)
     )
 
-    if category_totals_df.empty:
-        top_category = "None"
-    else:
-        top_category = category_totals_df.iloc[0]["category"]
-
     chart_data = category_totals_df.to_dict(orient="records")
     table_data = df.head(10).to_dict(orient="records")
 
-    # FIX 1: Indentation (Move this prompt INSIDE the function)
-    # ---------- AI Prompt ----------
-    prompt = f"""
-### SYSTEM ROLE
-You are a strict Expense Data Analyst. Your goal is to report facts based ONLY on the provided dataset.
+    top_category = (
+        category_totals_df.iloc[0]["category"]
+        if not category_totals_df.empty
+        else "None"
+    )
 
-### DATA CONTEXT
-- Total Spend: ₹{total_spent}
-- Top Category: {top_category}
-- Transaction Count: {transaction_count}
-- Category Breakdown: {chart_data}
 
-### OPERATIONAL RULES
-1. **Data Strictness:** Use numbers strictly from the 'DATA CONTEXT'.
-2. **No Financial Advice:** Prohibited.
-3. **Reframing Strategy:** If user asks "How to save?", list dominant categories.
-4. **Scope:** Decline unrelated questions.
+    q = question.lower()
 
-### USER QUESTION
-{question}
+    # Greetings
+    GREETING_KEYWORDS = ["hello", "hi", "hey", "good morning", "good evening", "what's up", "wassup"]
+    
+    if any(q.strip() == word or q.strip() == word + "!" for word in GREETING_KEYWORDS):
+        return {
+            "answer": "👋 Hello! I'm your expense analyst. Ask me anything about your spending - like 'How much did I spend on food?' or 'How can I save money?'",
+            "chartData": chart_data,
+            "tableData": table_data,
+            "summary": {
+                "total": total_spent,
+                "topCategory": top_category,
+                "transactionCount": transaction_count,
+            },
+        }
 
-### RESPONSE GUIDELINES
-- Answer in short, objective sentences.
+    # Unrelated questions
+    UNRELATED_KEYWORDS = [
+        "joke", "story", "weather", "cricket", "football", "movie", "film", "song", "music",
+        "virat", "kohli", "messi", "ronaldo", "actor", "actress", "game", "play",
+        "politics", "election", "president", "minister", "news", "recipe"
+    ]
+
+    if any(word in q for word in UNRELATED_KEYWORDS):
+        return {
+            "answer": "I specialize in expense analysis only. Try asking 'How can I reduce my spending?' or 'What's my biggest expense?'",
+            "chartData": chart_data,
+            "tableData": table_data,
+            "summary": {
+                "total": total_spent,
+                "topCategory": top_category,
+                "transactionCount": transaction_count,
+            },
+        }
+
+
+    top_3_spending = sum([cat['amount'] for cat in chart_data[:3]]) if len(chart_data) >= 3 else total_spent
+    potential_savings = int(top_3_spending * 0.25)
+    
+    data_context = f"""
+EXPENSE DATA:
+- Total spending: ₹{total_spent}
+- Number of transactions: {transaction_count}
+- Top spending category: {top_category}
+
+Detailed breakdown by category:
+{chr(10).join([f"  • {cat['category']}: ₹{cat['amount']}" for cat in chart_data])}
+
+Recent transactions (sample):
+{chr(10).join([f"  • {row.get('date', 'N/A')} - {row.get('description', 'N/A')} ({row.get('category', 'N/A')}): ₹{row.get('amount', 0)}" for row in table_data[:5]])}
 """
 
-    # FIX 2: Indentation & Syntax (Remove semicolon)
-    # ---------- Gemini call ----------
+    prompt = f"""
+You are a helpful personal finance assistant analyzing someone's expense data.
+
+{data_context}
+
+USER'S QUESTION: "{question}"
+
+INSTRUCTIONS:
+1. If asking for FACTS (amounts, totals, categories):
+   - Give direct, accurate answer
+   - Be precise with numbers
+   - Keep it short (1-2 sentences)
+
+2. If asking for ADVICE (save, reduce, manage, tips):
+   - Identify highest spending categories
+   - Give 2-3 SPECIFIC actionable suggestions
+   - Mention realistic savings (around ₹{potential_savings})
+   - Be conversational (3-4 sentences)
+
+3. If asking about data not present:
+   - Say data doesn't contain that info
+   - Suggest what you CAN help with
+
+Keep responses concise and friendly.
+"""
+
+
     try:
-        # Note: "gemini-2.5-flash-lite" likely doesn't exist yet. 
-        # Use "gemini-1.5-flash" or "gemini-2.0-flash-exp"
         response = client.models.generate_content(
-            model="gemini-2.5-flash-lite", 
+            model="gemini-2.0-flash",
             contents=prompt,
         )
 
-        answer = (
-            response.text
-            .replace("**", "")
-            .replace("*", "")
-            .strip()
-        )
+        answer = response.text.replace("**", "").replace("*", "").strip()
 
     except Exception as e:
-        print("Gemini error:", e)
-        answer = "⚠️ AI analysis failed. Please try again."
+        print(f"Gemini error: {e}")
+        answer = "⚠️ AI analysis failed. Please try again later."
 
-    # ---------- Final response ----------
+  
     return {
         "answer": answer,
         "chartData": chart_data,
