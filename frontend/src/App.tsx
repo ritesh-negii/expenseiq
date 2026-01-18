@@ -21,52 +21,54 @@ function App() {
   const [tableData, setTableData] = useState<any[]>([]);
   const [showInsights, setShowInsights] = useState(false);
 
- const sendMessage = async () => {
-  if (!input.trim() || isLoading) return;
+  const sendMessage = async () => {
+    if (!input.trim() || isLoading) return;
 
-  const userMessage = input.trim().toLowerCase();
+    const userMessage = input.trim().toLowerCase();
 
-  // ---------- SMALL TALK HANDLING ----------
-  const smallTalk = ["hi", "hello", "hey", "thanks", "thank you"];
+    // ---------- SMALL TALK HANDLING ----------
+    const smallTalk = ["hi", "hello", "hey", "thanks", "thank you"];
 
-  if (smallTalk.includes(userMessage)) {
-    setMessages((p) => [
-      ...p,
-      { role: "user", text: userMessage },
-      {
-        role: "assistant",
-        text: "You’re welcome. Ask me something about your expenses whenever you’re ready.",
-      },
-    ]);
+    if (smallTalk.includes(userMessage)) {
+      setMessages((p) => [
+        ...p,
+        { role: "user", text: userMessage },
+        {
+          role: "assistant",
+          text: "You’re welcome. Ask me something about your expenses whenever you’re ready.",
+        },
+      ]);
+      setInput("");
+      return;
+    }
+
+    // ---------- REQUIRE FILE FOR EXPENSE QUESTIONS ----------
+    if (!file) {
+      setMessages((p) => [
+        ...p,
+        { role: "user", text: userMessage },
+        {
+          role: "assistant",
+          text: "Please upload an expense file first so I can analyze your data.",
+        },
+      ]);
+      setInput("");
+      return;
+    }
+
+    // ---------- NORMAL FLOW ----------
+    setMessages((p) => [...p, { role: "user", text: userMessage }]);
     setInput("");
-    return;
-  }
+    setIsLoading(true);
 
-  // ---------- REQUIRE FILE FOR EXPENSE QUESTIONS ----------
-  if (!file) {
-    setMessages((p) => [
-      ...p,
-      { role: "user", text: userMessage },
-      {
-        role: "assistant",
-        text: "Please upload an expense file first so I can analyze your data.",
-      },
-    ]);
-    setInput("");
-    return;
-  }
-
-  // ---------- NORMAL FLOW ----------
-  setMessages((p) => [...p, { role: "user", text: userMessage }]);
-  setInput("");
-  setIsLoading(true);
-
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("question", userMessage);
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("question", userMessage);
 
     try {
-      const res = await fetch("http://localhost:8000/analyze", {
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+      const res = await fetch(`${API_BASE_URL}/analyze`, {
         method: "POST",
         body: formData,
       });
@@ -81,7 +83,7 @@ function App() {
       setChartData(data.chartData || []);
       setTableData(data.tableData || []);
       setSummary(data.summary || null);
-      
+
       // Auto-show insights on mobile after first question
       if (window.innerWidth < 1024 && data.chartData?.length > 0) {
         setTimeout(() => setShowInsights(true), 500);
@@ -114,7 +116,7 @@ function App() {
                 💰 ExpenseIQ
               </h1>
               <p className="text-xs sm:text-sm text-purple-100 mt-0.5">
-               AI-powered expense analysis assistant
+                AI-powered expense analysis assistant
               </p>
             </div>
             {(chartData.length > 0 || tableData.length > 0) && (
@@ -155,7 +157,9 @@ function App() {
           } flex-col overflow-hidden`}
         >
           <div className="lg:hidden px-4 py-3 border-b border-gray-200 bg-white/80 backdrop-blur-sm flex items-center justify-between sticky top-0 z-10">
-            <h2 className="text-lg font-bold text-gray-800">📊 Your Insights</h2>
+            <h2 className="text-lg font-bold text-gray-800">
+              📊 Your Insights
+            </h2>
             <button
               onClick={() => setShowInsights(false)}
               className="text-gray-500 hover:text-gray-700 p-1.5 hover:bg-gray-100 rounded-lg transition-all"
