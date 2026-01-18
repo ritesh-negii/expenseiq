@@ -4,22 +4,20 @@ from fastapi.responses import JSONResponse
 import pandas as pd
 import os
 from dotenv import load_dotenv
-from google import genai
+import google.generativeai as genai
 
-# -------------------------------------------------
-# Load environment variables
-# -------------------------------------------------
+
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not GEMINI_API_KEY:
     raise RuntimeError("GEMINI_API_KEY not found in environment variables")
 
-client = genai.Client(api_key=GEMINI_API_KEY)
 
-# -------------------------------------------------
-# App setup
-# -------------------------------------------------
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel("gemini-2.5-flash")
+
+
 app = FastAPI(title="ExpenseIQ API", version="1.0")
 
 app.add_middleware(
@@ -33,9 +31,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# -------------------------------------------------
-# Helper functions
-# -------------------------------------------------
+
 def error_response(message: str):
     return JSONResponse(
         status_code=400,
@@ -46,6 +42,7 @@ def error_response(message: str):
             "summary": None,
         },
     )
+
 
 @app.post("/analyze")
 async def analyze_expenses(
@@ -99,7 +96,7 @@ async def analyze_expenses(
     chart_data = category_totals_df.to_dict(orient="records")
     table_data = df.head(10).to_dict(orient="records")
 
-    # ---------- SMALL TALK GUARD ----------
+    # ---------- Small talk guard ----------
     SMALL_TALK = {"hi", "hello", "hey", "thanks", "thank you"}
 
     if question.strip().lower() in SMALL_TALK:
@@ -114,70 +111,33 @@ async def analyze_expenses(
             },
         }
 
-
-  # ---------- AI Prompt ----------
+    # ---------- AI Prompt ----------
     prompt = f"""
-SYSTEM ROLE:
 You are an AI-powered Expense Analysis Assistant.
-
-Your responsibility is to analyze and explain user-uploaded expense data in a clear, factual, and conversational manner.
+You analyze ONLY the provided expense data.
 You are NOT a financial advisor.
 
-DATA SCOPE:
-You may ONLY use information derived from the provided expense dataset.
-Do NOT assume, predict, or invent any data beyond what is provided.
-
-AVAILABLE EXPENSE DATA:
+Available Data:
 - Total Spend: ₹{total_spent}
 - Transaction Count: {transaction_count}
 - Category Breakdown: {chart_data}
-- Recent Transactions (sample): {table_data}
 
-ALLOWED BEHAVIOR:
-- Summarize expenses using exact numbers from the dataset.
-- Compare categories and highlight dominant spending areas.
-- Explain spending patterns based on historical data.
-- Reframe future-oriented questions using past spending insights.
-- Answer clearly and concisely in natural language.
+Rules:
+- Use exact numbers from data
+- No advice, no predictions
+- Reframe future questions using past spending only
 
-RESTRICTED BEHAVIOR:
-- Do NOT give financial advice or recommendations.
-- Do NOT suggest budgets, savings plans, investments, or predictions.
-- Do NOT answer questions unrelated to expense analysis.
-
-REFRAMING RULE:
-If the user asks about managing future expenses or saving money:
-- Do NOT refuse the question.
-- Reframe the response using historical spending patterns only.
-- Highlight high-spending categories and spending concentration.
-- Avoid commands, instructions, or predictions.
-
-RESPONSE STYLE:
-- Short paragraphs
-- Neutral, analytical tone
-- Plain text only
-- No emojis or markdown
-
-USER QUESTION:
+User Question:
 {question}
-
-Provide the best possible answer strictly based on the expense data above.
 """
-
-
 
     # ---------- Gemini Call ----------
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-        )
-
+        response = model.generate_content(prompt)
         answer = response.text.strip()
-
     except Exception as e:
         print("Gemini error:", e)
-        answer = "⚠️ I couldn't analyze your expenses right now."
+        answer = "I couldn't analyze your expenses right now."
 
     return {
         "answer": answer,
@@ -189,3 +149,5 @@ Provide the best possible answer strictly based on the expense data above.
             "transactionCount": transaction_count,
         },
     }
+
+
