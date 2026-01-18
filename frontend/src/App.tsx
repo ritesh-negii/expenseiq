@@ -9,7 +9,7 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      text: "👋 Hi! Upload your expense file (CSV or Excel) and ask me anything - like 'How can I save money?' or 'What did I spend on food?'",
+      text: "👋 Hi! Upload your expense file (CSV or Excel)",
     },
   ]);
   const [isLoading, setIsLoading] = useState(false);
@@ -21,17 +21,49 @@ function App() {
   const [tableData, setTableData] = useState<any[]>([]);
   const [showInsights, setShowInsights] = useState(false);
 
-  const sendMessage = async () => {
-    if (!input.trim() || !file || isLoading) return;
+ const sendMessage = async () => {
+  if (!input.trim() || isLoading) return;
 
-    const userMessage = input.trim();
-    setMessages((p) => [...p, { role: "user", text: userMessage }]);
+  const userMessage = input.trim().toLowerCase();
+
+  // ---------- SMALL TALK HANDLING ----------
+  const smallTalk = ["hi", "hello", "hey", "thanks", "thank you"];
+
+  if (smallTalk.includes(userMessage)) {
+    setMessages((p) => [
+      ...p,
+      { role: "user", text: userMessage },
+      {
+        role: "assistant",
+        text: "You’re welcome. Ask me something about your expenses whenever you’re ready.",
+      },
+    ]);
     setInput("");
-    setIsLoading(true);
+    return;
+  }
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("question", userMessage);
+  // ---------- REQUIRE FILE FOR EXPENSE QUESTIONS ----------
+  if (!file) {
+    setMessages((p) => [
+      ...p,
+      { role: "user", text: userMessage },
+      {
+        role: "assistant",
+        text: "Please upload an expense file first so I can analyze your data.",
+      },
+    ]);
+    setInput("");
+    return;
+  }
+
+  // ---------- NORMAL FLOW ----------
+  setMessages((p) => [...p, { role: "user", text: userMessage }]);
+  setInput("");
+  setIsLoading(true);
+
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("question", userMessage);
 
     try {
       const res = await fetch("http://localhost:8000/analyze", {
@@ -40,7 +72,7 @@ function App() {
       });
 
       if (!res.ok) {
-        throw new Error("Backend error");
+        throw new Error(`Backend error: ${res.status}`);
       }
 
       const data = await res.json();
@@ -82,7 +114,7 @@ function App() {
                 💰 ExpenseIQ
               </h1>
               <p className="text-xs sm:text-sm text-purple-100 mt-0.5">
-                Your AI-powered finance assistant
+               AI-powered expense analysis assistant
               </p>
             </div>
             {(chartData.length > 0 || tableData.length > 0) && (
